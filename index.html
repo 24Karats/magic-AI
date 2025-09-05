@@ -125,8 +125,62 @@ const resultPlaceholder = document.getElementById('result-placeholder'), loader 
 const exampleButtonsContainer = document.getElementById('example-buttons-container'), addPromptBtn = document.getElementById('add-prompt-btn'), copyToInput1Btn = document.getElementById('copy-to-input1-btn');
 let imageInfo1 = null, imageInfo2 = null, currentResultImage = null;
 
+// ✨ --- 新增：優化畫質的輔助函式 --- ✨
+/**
+ * 將一個 Image 物件轉換為適合 API 的高畫質 Base64 字串。
+ * 它會在背景將圖片縮放到最大尺寸，同時保持長寬比。
+ * @param {Image} image - 已載入的圖片物件。
+ * @param {string} mimeType - 圖片的 MimeType。
+ * @param {number} [maxSize=1024] - 縮放後的最大寬度或高度。
+ * @returns {string} - 不含 "data:..." 前綴的 Base64 字串。
+ */
+function getImageDataForApi(image, mimeType, maxSize = 1024) {
+    const offscreenCanvas = document.createElement('canvas');
+    const ctx = offscreenCanvas.getContext('2d');
+    let { width, height } = image;
+
+    if (width > height) {
+        if (width > maxSize) {
+            height = Math.round(height * (maxSize / width));
+            width = maxSize;
+        }
+    } else {
+        if (height > maxSize) {
+            width = Math.round(width * (maxSize / height));
+            height = maxSize;
+        }
+    }
+    offscreenCanvas.width = width;
+    offscreenCanvas.height = height;
+    ctx.drawImage(image, 0, 0, width, height);
+    
+    // 對於 JPEG 格式，可以指定較高的品質
+    const quality = mimeType === 'image/jpeg' ? 0.95 : undefined;
+    return offscreenCanvas.toDataURL(mimeType, quality).split(',')[1];
+}
+
 function drawImageOnCanvas(image, canvas) { const ctx = canvas.getContext('2d'); const container = canvas.parentElement; canvas.width = container.clientWidth; canvas.height = container.clientHeight; const canvasRatio = canvas.width / canvas.height; const imageRatio = image.width / image.height; let drawWidth, drawHeight, offsetX, offsetY; if (imageRatio > canvasRatio) { drawWidth = canvas.width; drawHeight = drawWidth / imageRatio; offsetX = 0; offsetY = (canvas.height - drawHeight) / 2; } else { drawHeight = canvas.height; drawWidth = drawHeight * imageRatio; offsetY = 0; offsetX = (canvas.width - drawWidth) / 2; } ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(image, offsetX, offsetY, drawWidth, drawHeight); canvas.style.display = 'block'; }
-function setupImageUpload(fileInput, canvas, label, removeBtn, imageInfoRef) { fileInput.addEventListener('change', (event) => { const file = event.target.files[0]; if (file) { imageInfoRef.info = { mimeType: file.type }; const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { drawImageOnCanvas(img, canvas); label.style.display = 'none'; removeBtn.style.display = 'grid'; }; img.src = e.target.result; }; reader.readAsDataURL(file); } }); removeBtn.addEventListener('click', () => { fileInput.value = ''; const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height); canvas.style.display = 'none'; label.style.display = 'flex'; removeBtn.style.display = 'none'; imageInfoRef.info = null; }); }
+function setupImageUpload(fileInput, canvas, label, removeBtn, imageInfoRef) {
+    fileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    // ✨ 修改：儲存原始圖片物件和 mimeType
+                    imageInfoRef.info = { mimeType: file.type, imageObject: img };
+                    drawImageOnCanvas(img, canvas); // 僅用於顯示
+                    label.style.display = 'none';
+                    removeBtn.style.display = 'grid';
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+    removeBtn.addEventListener('click', () => { fileInput.value = ''; const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height); canvas.style.display = 'none'; label.style.display = 'flex'; removeBtn.style.display = 'none'; imageInfoRef.info = null; });
+}
 function setLoadingState(isLoading) { if (isLoading) { generateBtn.disabled = true; generateBtn.textContent = '生成中...'; resultPlaceholder.style.display = 'none'; resultCanvas.style.display = 'none'; loader.style.display = 'block'; aiResponse.textContent = '已將請求發送到 AI，請耐心等候...'; copyToInput1Btn.style.display = 'none'; } else { generateBtn.disabled = false; generateBtn.textContent = '⚡️ 產生圖片'; loader.style.display = 'none'; if (currentResultImage) { copyToInput1Btn.style.display = 'block'; } } }
 
 async function handleGenerateClick() {
@@ -138,44 +192,49 @@ async function handleGenerateClick() {
     currentResultImage = null;
     copyToInput1Btn.style.display = 'none';
     try {
+        // ✨ 修改：使用新的輔助函式來準備高畫質圖片數據
         const payload = {
             prompt: promptInput.value,
             image1_mimeType: imageInfo1 ? imageInfo1.mimeType : null,
-            image1_data: imageInfo1 ? canvas1.toDataURL(imageInfo1.mimeType).split(',')[1] : null,
+            image1_data: imageInfo1 ? getImageDataForApi(imageInfo1.imageObject, imageInfo1.mimeType) : null,
             image2_mimeType: imageInfo2 ? imageInfo2.mimeType : null,
-            image2_data: imageInfo2 ? canvas2.toDataURL(imageInfo2.mimeType).split(',')[1] : null
+            image2_data: imageInfo2 ? getImageDataForApi(imageInfo2.imageObject, imageInfo2.mimeType) : null
         };
+
         const response = await fetch(N8N_WEBHOOK_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         if (!response.ok) { const errorData = await response.json(); throw new Error(`伺服器錯誤: ${errorData.message || response.statusText}`); }
         const result = await response.json();
 
         if (result.candidates && result.candidates[0].content.parts[0].inlineData) {
             const resultPart = result.candidates[0].content.parts[0];
+            // ✨ 修改：直接使用 API 回傳的原始高畫質 Data URL
+            const resultDataUrl = `data:${resultPart.inlineData.mimeType};base64,${resultPart.inlineData.data}`;
+            
+            // 1. 立刻將高畫質圖片設定給下載按鈕
+            downloadBtn.href = resultDataUrl;
+            downloadBtn.classList.remove('disabled');
+
+            // 2. 建立圖片物件以進行後續操作 (顯示和複製)
             const resultImg = new Image();
             resultImg.onload = () => {
+                // 3. 將高畫質圖片繪製到預覽畫布上
                 drawImageOnCanvas(resultImg, resultCanvas);
-                downloadBtn.href = resultCanvas.toDataURL('image/png');
-                downloadBtn.classList.remove('disabled');
-                currentResultImage = resultImg;
+                currentResultImage = resultImg; // 儲存高畫質圖片物件
                 copyToInput1Btn.style.display = 'block';
             };
-            resultImg.src = `data:${resultPart.inlineData.mimeType};base64,${resultPart.inlineData.data}`;
+            resultImg.src = resultDataUrl;
             aiResponse.textContent = '圖片已成功生成！';
         } else {
-            // ✨ --- 錯誤處理優化 --- ✨
-            const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text; // 使用可選串聯，更安全
+            const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
             if (textResponse && textResponse.trim() !== '') {
-                // 如果 AI 回傳了有意義的文字
                 throw new Error(`AI 回傳了文字訊息，而非圖片：${textResponse}`);
             } else {
-                // 如果 AI 回應為空，很可能是被安全機制阻擋
                 throw new Error('AI 無法處理您的請求。這可能是因為圖片或指令內容觸發了安全機制，請嘗試更換圖片或修改您的指令。');
             }
         }
     } catch (error) {
         console.error('Error:', error); aiResponse.textContent = `發生錯誤：${error.message}`;
-        const resultCtx = resultCanvas.getContext('2d');
-        resultCtx.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
+        const resultCtx = resultCanvas.getContext('2d'); resultCtx.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
         resultCanvas.style.display = 'none'; resultPlaceholder.style.display = 'block';
         currentResultImage = null;
     } finally { setLoadingState(false); }
@@ -189,7 +248,28 @@ function getPrompts() { const storedPrompts = localStorage.getItem(PROMPT_STORAG
 function savePrompts(prompts) { localStorage.setItem(PROMPT_STORAGE_KEY, JSON.stringify(prompts)); }
 exampleButtonsContainer.addEventListener('click', (event) => { const target = event.target.closest('button, .prompt-text'); if (!target) return; const chip = target.closest('.prompt-chip'); const index = parseInt(chip.dataset.index); let prompts = getPrompts(); if (target.classList.contains('edit-icon')) { const textSpan = chip.querySelector('.prompt-text'); const currentText = textSpan.textContent; chip.innerHTML = `<input type="text" class="edit-input" value="${currentText}" /><button class="chip-icon save-icon" title="儲存">${icons.save}</button><button class="chip-icon delete-icon" title="刪除">${icons.delete}</button>`; chip.querySelector('.edit-input').focus(); } else if (target.classList.contains('save-icon')) { const input = chip.querySelector('.edit-input'); const newText = input.value.trim(); if (newText) { prompts[index] = newText; savePrompts(prompts); } renderExampleButtons(); } else if (target.classList.contains('delete-icon')) { if (confirm(`確定要刪除範本「${prompts[index]}」嗎？`)) { prompts.splice(index, 1); savePrompts(prompts); renderExampleButtons(); } } else if (target.classList.contains('prompt-text')) { promptInput.value = target.textContent; } });
 addPromptBtn.addEventListener('click', () => { const newPromptText = prompt('請輸入要新增的範本指令：'); if (newPromptText && newPromptText.trim()) { let prompts = getPrompts(); prompts.push(newPromptText.trim()); savePrompts(prompts); renderExampleButtons(); } });
-copyToInput1Btn.addEventListener('click', () => { if (currentResultImage) { fileInput1.value = ''; const ctx1 = canvas1.getContext('2d'); ctx1.clearRect(0, 0, canvas1.width, canvas1.height); canvas1.style.display = 'none'; uploadLabel1.style.display = 'flex'; removeBtn1.style.display = 'none'; imageInfo1 = null; drawImageOnCanvas(currentResultImage, canvas1); uploadLabel1.style.display = 'none'; removeBtn1.style.display = 'grid'; const dataURL = resultCanvas.toDataURL('image/png'); imageInfo1 = { mimeType: 'image/png' }; aiResponse.textContent = '生成圖片已複製到第一張圖位置！您可以繼續進行編輯。'; copyToInput1Btn.style.display = 'none'; currentResultImage = null; } else { aiResponse.textContent = '沒有生成好的圖片可以複製。'; } });
+copyToInput1Btn.addEventListener('click', () => {
+    if (currentResultImage) {
+        fileInput1.value = '';
+        const ctx1 = canvas1.getContext('2d');
+        ctx1.clearRect(0, 0, canvas1.width, canvas1.height);
+        canvas1.style.display = 'none'; uploadLabel1.style.display = 'flex'; removeBtn1.style.display = 'none';
+        imageInfo1 = null;
+
+        drawImageOnCanvas(currentResultImage, canvas1);
+        uploadLabel1.style.display = 'none'; removeBtn1.style.display = 'grid';
+
+        // ✨ 修改：更新 imageInfo1 以包含高畫質圖片物件
+        const mimeType = downloadBtn.href.substring(downloadBtn.href.indexOf(":") + 1, downloadBtn.href.indexOf(";"));
+        imageInfo1 = { mimeType: mimeType, imageObject: currentResultImage };
+        
+        aiResponse.textContent = '生成圖片已複製到第一張圖位置！您可以繼續進行編輯。';
+        copyToInput1Btn.style.display = 'none';
+        currentResultImage = null;
+    } else {
+        aiResponse.textContent = '沒有生成好的圖片可以複製。';
+    }
+});
 
 function initialize() {
     setupImageUpload(fileInput1, canvas1, uploadLabel1, removeBtn1, { set info(val) { imageInfo1 = val; } });
