@@ -1,558 +1,159 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>MIXXIN AI 圖片生成器（Canvas + IMG 雙保險）</title>
-  <style>
-    :root{
-      --bg-color:#FFF9E6;
-      --card-bg-color:#FFFFFF;
-      --border-color:#DCD7C9;
-      --text-color:#3C2F2F;
-      --text-secondary-color:#7D6E6E;
-      --accent-color:#FFC107;
-      --accent-gradient:linear-gradient(45deg,#FFD700,#FFA500);
-    }
-    *{box-sizing:border-box}
-    body{
-      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
-      background:var(--bg-color); color:var(--text-color);
-      margin:0; padding:2rem; min-height:100vh;
-      display:flex; justify-content:center; align-items:flex-start;
-    }
-    .container{width:100%; max-width:1200px}
-    h1{
-      margin:0 0 .25rem; font-size:2.2rem; text-align:center;
-      display:flex; align-items:center; justify-content:center; gap:10px;
-    }
-    .subtitle{ text-align:center; color:var(--text-secondary-color); margin:0 0 1rem}
-    .header-icon{height:40px; width:auto}
-    .main-grid{display:grid; grid-template-columns:1fr 1fr; gap:2rem; margin-top:1rem}
-    .input-section,.output-section{display:flex; flex-direction:column; gap:1rem}
-    .image-uploads{display:grid; grid-template-columns:1fr 1fr; gap:1rem}
-
-    .upload-box,.result-box{
-      background:var(--card-bg-color);
-      border:2px dashed var(--border-color);
-      border-radius:12px; padding:1rem;
-      position:relative; aspect-ratio:1/1; overflow:hidden;
-      display:flex; justify-content:center; align-items:center;
-      transition:border-color .25s;
-      min-height:300px; /* 讓容器一定有高度，避免初次為 0 */
-    }
-    .upload-box:hover{border-color:var(--accent-color)}
-    .upload-box label{
-      cursor:pointer; color:var(--text-secondary-color);
-      display:flex; align-items:center; justify-content:center;
-      width:100%; height:100%; text-align:center;
-    }
-    .upload-box input[type=file]{display:none}
-    .upload-box canvas,.result-box canvas{width:100%; height:100%; object-fit:contain; border-radius:8px}
-    .remove-btn{
-      position:absolute; top:10px; right:10px; width:24px; height:24px;
-      display:none; place-items:center; border:none; border-radius:50%;
-      background:rgba(0,0,0,.7); color:#fff; cursor:pointer;
-    }
-
-    .prompt-box,.status-box{
-      background:var(--card-bg-color);
-      border:1px solid var(--border-color);
-      border-radius:12px; padding:1rem;
-    }
-    h3{
-      margin:0 0 .6rem; font-size:1rem; color:var(--text-secondary-color);
-      border-bottom:1px solid var(--border-color); padding-bottom:.5rem;
-      display:flex; justify-content:space-between; align-items:center;
-    }
-    #prompt-input{
-      width:100%; height:90px; resize:vertical;
-      background:#fff; color:#333;
-      border:1px solid var(--border-color); border-radius:8px; padding:.75rem;
-      font-size:1rem;
-    }
-    .example-buttons{display:flex; flex-wrap:wrap; gap:.5rem; margin-top:.6rem}
-    .prompt-chip{
-      display:inline-flex; align-items:center; gap:.5rem;
-      border:1px solid var(--border-color); border-radius:20px;
-      color:var(--text-secondary-color); padding:.45rem .9rem; cursor:pointer;
-    }
-    .prompt-chip:hover{background:var(--border-color); color:var(--text-color)}
-    .chip-icon{border:none; background:none; cursor:pointer; padding:0 .25rem}
-
-    #generate-btn,#copy-to-input1-btn,#download-btn{
-      width:100%; padding:1rem; font-size:1.05rem; font-weight:700;
-      border:none; border-radius:8px; cursor:pointer; transition:opacity .25s;
-    }
-    #generate-btn{background:var(--accent-gradient); color:#333}
-    #copy-to-input1-btn{background:#A0C49D; color:#333; display:none}
-    #download-btn{
-      margin-top:.6rem; background:#FFA000; color:#333; text-decoration:none; text-align:center;
-      pointer-events:none; opacity:.6;
-    }
-    #download-btn.enabled{pointer-events:auto; opacity:1}
-    #generate-btn:disabled,#copy-to-input1-btn:disabled{opacity:.5; cursor:not-allowed}
-
-    #result-placeholder,#loader{color:var(--text-secondary-color); text-align:center}
-    #loader{display:none}
-    #ai-response{font-size:.92rem; color:var(--text-secondary-color); white-space:pre-wrap}
-
-    /* 顯示保底：用 <img> 也能看見結果 */
-    #result-img{
-      display:none; max-width:100%; max-height:100%; border-radius:8px; object-fit:contain;
-      position:absolute; inset:1rem; /* 與 canvas 區域重疊 */
-    }
-
-    @media (max-width:900px){ .main-grid{grid-template-columns:1fr} }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 圖片生成器 (Canvas 版本)</title>
+    <style>
+        /* CSS 樣式與之前完全相同，此處省略以節省篇幅 */
+        :root {
+            --bg-color: #FFF9E6;
+            --card-bg-color: #FFFFFF;
+            --border-color: #DCD7C9;
+            --text-color: #3C2F2F;
+            --text-secondary-color: #7D6E6E;
+            --accent-color: #FFC107;
+            --accent-gradient: linear-gradient(45deg, #FFD700, #FFA500);
+            --success-color: #4CAF50;
+            --danger-color: #F44336;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+        .container { width: 100%; max-width: 1200px; }
+        h1 { text-align: center; font-size: 2.5rem; color: var(--text-color); display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .header-icon { height: 40px; width: auto; }
+        .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 2rem; }
+        .input-section, .output-section { display: flex; flex-direction: column; gap: 1.5rem; }
+        .image-uploads { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .upload-box, .result-box { background-color: var(--card-bg-color); border: 2px dashed var(--border-color); border-radius: 12px; padding: 1rem; display: flex; justify-content: center; align-items: center; position: relative; aspect-ratio: 1 / 1; overflow: hidden; transition: border-color 0.3s; }
+        .upload-box:hover { border-color: var(--accent-color); }
+        .upload-box label { cursor: pointer; text-align: center; color: var(--text-secondary-color); display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; }
+        .upload-box input[type="file"] { display: none; }
+        .upload-box canvas, .result-box canvas { width: 100%; height: 100%; object-fit: contain; border-radius: 8px; }
+        .upload-box .remove-btn { position: absolute; top: 10px; right: 10px; background-color: rgba(0, 0, 0, 0.7); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: none; place-items: center; }
+        .prompt-box, .action-box, .status-box { background-color: var(--card-bg-color); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; }
+        h3 { margin-top: 0; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1rem; font-size: 1rem; color: var(--text-secondary-color); display: flex; justify-content: space-between; align-items: center; }
+        #prompt-input { width: 100%; height: 80px; background-color: #FFFFFF; border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-color); padding: 0.75rem; font-size: 1rem; resize: vertical; }
+        .example-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+        .prompt-chip { display: inline-flex; align-items: center; gap: 0.5rem; background: none; border: 1px solid var(--border-color); color: var(--text-secondary-color); padding: 0.5rem 1rem; border-radius: 20px; cursor: pointer; transition: all 0.2s; }
+        .prompt-chip:hover { background-color: var(--border-color); color: var(--text-color); }
+        .prompt-chip .prompt-text { flex-grow: 1; }
+        .prompt-chip .edit-input { border: none; background: transparent; border-bottom: 1px solid var(--accent-color); color: var(--text-color); outline: none; padding: 2px; font-size: inherit; }
+        .chip-icon { background: none; border: none; cursor: pointer; padding: 2px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+        .chip-icon:hover { background-color: rgba(0,0,0,0.1); }
+        .chip-icon svg { width: 14px; height: 14px; }
+        #add-prompt-btn { font-size: 1.2rem; font-weight: bold; line-height: 1; }
+        #generate-btn, #download-btn { width: 100%; padding: 1rem; font-size: 1.1rem; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; transition: opacity 0.3s; }
+        #copy-to-input1-btn { background-color: #A0C49D; color: #333333; width: 100%; padding: 0.8rem; font-size: 1rem; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; transition: opacity 0.3s; display: none; }
+        #generate-btn { background: var(--accent-gradient); color: #333333; }
+        #download-btn { margin-top: 1rem; background-color: #FFA000; color: #333333; text-decoration: none; display: block; text-align: center; }
+        #generate-btn:disabled, #download-btn.disabled, #copy-to-input1-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .result-box { border-style: solid; }
+        #result-placeholder, #loader { color: var(--text-secondary-color); text-align: center; }
+        #loader { display: none; }
+        #ai-response { font-size: 0.9rem; color: var(--text-secondary-color); margin-top: 1rem; }
+        @media (max-width: 900px) { .main-grid { grid-template-columns: 1fr; } }
+    </style>
 </head>
 <body>
-  <div class="container">
+
+<div class="container">
     <h1>
-      <img class="header-icon" src="https://i.postimg.cc/BQ0nRvL7/generated-image-1-removebg-preview.png" alt="MIXXIN AI" />
-      MIXXIN AI
+        <img src="https://i.postimg.cc/BQ0nRvL7/generated-image-1-removebg-preview.png" alt="MIXXIN AI Icon" class="header-icon">
+        MIXXIN AI
     </h1>
-    <p class="subtitle">上傳一或兩張圖片，描述您想如何改變或結合它們。AI 會實現您的創意。</p>
-
+    <p style="text-align: center; color: var(--text-secondary-color);">上傳一或兩張圖片，描述您想如何改變或結合它們。我們的 AI 將會實現您的創意。</p>
+    
     <div class="main-grid">
-      <!-- 左欄：輸入 -->
-      <div class="input-section">
-        <div class="image-uploads">
-          <div class="upload-box">
-            <label for="file-input-1" id="upload-label-1"><span>1. 上傳第一張圖片</span></label>
-            <canvas id="canvas-1" style="display:none;"></canvas>
-            <input id="file-input-1" type="file" accept="image/*" />
-            <button id="remove-btn-1" class="remove-btn">×</button>
-          </div>
-          <div class="upload-box">
-            <label for="file-input-2" id="upload-label-2"><span>2. 上傳第二張圖片（可選）</span></label>
-            <canvas id="canvas-2" style="display:none;"></canvas>
-            <input id="file-input-2" type="file" accept="image/*" />
-            <button id="remove-btn-2" class="remove-btn">×</button>
-          </div>
+        <div class="input-section">
+            <div class="image-uploads">
+                <div class="upload-box">
+                    <label for="file-input-1" id="upload-label-1"><span>1. 上傳第一張圖片</span></label>
+                    <canvas id="canvas-1" style="display:none;"></canvas>
+                    <input type="file" id="file-input-1" accept="image/*">
+                    <button class="remove-btn" id="remove-btn-1">×</button>
+                </div>
+                <div class="upload-box">
+                    <label for="file-input-2" id="upload-label-2"><span>2. 上傳第二張圖片 (可選)</span></label>
+                    <canvas id="canvas-2" style="display:none;"></canvas>
+                    <input type="file" id="file-input-2" accept="image/*">
+                    <button class="remove-btn" id="remove-btn-2">×</button>
+                </div>
+            </div>
+            <div class="prompt-box">
+                <h3>
+                    <span>3. 輸入編輯指令</span>
+                    <button id="add-prompt-btn" class="chip-icon">+</button>
+                </h3>
+                <textarea id="prompt-input" placeholder="點擊下方範本或自行輸入指令..."></textarea>
+                <div class="example-buttons" id="example-buttons-container"></div>
+            </div>
+            <button id="generate-btn">⚡️ 產生圖片</button>
         </div>
-
-        <div class="prompt-box">
-          <h3>
-            <span>3. 輸入編輯指令</span>
-            <button id="add-prompt-btn" class="chip-icon" title="新增範本">＋</button>
-          </h3>
-          <textarea id="prompt-input" placeholder="點擊下方範本或自行輸入指令..."></textarea>
-          <div id="example-buttons-container" class="example-buttons"></div>
+        <div class="output-section">
+            <div class="result-box">
+                <div id="result-placeholder">編輯後圖片</div>
+                <div id="loader">🎨 AI 正在揮灑創意... 請稍候...</div>
+                <canvas id="result-canvas" style="display:none;"></canvas>
+            </div>
+            <button id="copy-to-input1-btn">↩️ 複製到第一張圖</button>
+            <a id="download-btn" class="disabled" href="#" download="generated_image.png">⬇️ 下載圖片</a>
+            <div class="status-box">
+                <h3>AI 回應:</h3>
+                <p id="ai-response">模型尚在等待任何指令。</p>
+            </div>
         </div>
-
-        <button id="generate-btn">⚡️ 產生圖片</button>
-      </div>
-
-      <!-- 右欄：輸出 -->
-      <div class="output-section">
-        <div class="result-box" id="result-box">
-          <div id="result-placeholder">編輯後圖片</div>
-          <div id="loader">🎨 AI 正在揮灑創意... 請稍候...</div>
-          <img id="result-img" alt="生成結果" />
-          <canvas id="result-canvas" style="display:none;"></canvas>
-        </div>
-
-        <button id="copy-to-input1-btn">↩️ 複製到第一張圖</button>
-        <a id="download-btn" class="" href="#" download="generated_image.png">⬇️ 下載圖片</a>
-
-        <div class="status-box">
-          <h3>AI 回應：</h3>
-          <p id="ai-response">模型尚在等待任何指令。</p>
-        </div>
-      </div>
     </div>
-  </div>
+</div>
 
-  <script>
-    // ★ 把這個改成你的 n8n Webhook
-    const N8N_WEBHOOK_URL = 'https://n8n.mixxin.tw/webhook/55dc8853-afd8-41ed-a271-2a8ed64737cd';
+<script>
+const N8N_WEBHOOK_URL = 'https://n8n.mixxin.tw/webhook/55dc8853-afd8-41ed-a271-2a8ed64737cd'; 
 
-    // DOM
-    const fileInput1 = document.getElementById('file-input-1');
-    const fileInput2 = document.getElementById('file-input-2');
-    const canvas1 = document.getElementById('canvas-1');
-    const canvas2 = document.getElementById('canvas-2');
-    const uploadLabel1 = document.getElementById('upload-label-1');
-    const uploadLabel2 = document.getElementById('upload-label-2');
-    const removeBtn1 = document.getElementById('remove-btn-1');
-    const removeBtn2 = document.getElementById('remove-btn-2');
+const fileInput1 = document.getElementById('file-input-1'), canvas1 = document.getElementById('canvas-1'), uploadLabel1 = document.getElementById('upload-label-1'), removeBtn1 = document.getElementById('remove-btn-1');
+const fileInput2 = document.getElementById('file-input-2'), canvas2 = document.getElementById('canvas-2'), uploadLabel2 = document.getElementById('upload-label-2'), removeBtn2 = document.getElementById('remove-btn-2');
+const promptInput = document.getElementById('prompt-input'), generateBtn = document.getElementById('generate-btn'), downloadBtn = document.getElementById('download-btn');
+const resultPlaceholder = document.getElementById('result-placeholder'), loader = document.getElementById('loader'), resultCanvas = document.getElementById('result-canvas'), aiResponse = document.getElementById('ai-response');
+const exampleButtonsContainer = document.getElementById('example-buttons-container'), addPromptBtn = document.getElementById('add-prompt-btn'), copyToInput1Btn = document.getElementById('copy-to-input1-btn');
+let imageInfo1 = null, imageInfo2 = null, currentResultImage = null;
 
-    const promptInput = document.getElementById('prompt-input');
-    const generateBtn = document.getElementById('generate-btn');
-    const copyToInput1Btn = document.getElementById('copy-to-input1-btn');
-    const downloadBtn = document.getElementById('download-btn');
+// ✨ --- 新增：優化畫質的輔助函式 --- ✨
+/**
+ * 將一個 Image 物件轉換為適合 API 的高畫質 Base64 字串。
+ * 它會在背景將圖片縮放到最大尺寸，同時保持長寬比。
+ * @param {Image} image - 已載入的圖片物件。
+ * @param {string} mimeType - 圖片的 MimeType。
+ * @param {number} [maxSize=1024] - 縮放後的最大寬度或高度。
+ * @returns {string} - 不含 "data:..." 前綴的 Base64 字串。
+ */
+function getImageDataForApi(image, mimeType, maxSize = 1024) {
+    const offscreenCanvas = document.createElement('canvas');
+    const ctx = offscreenCanvas.getContext('2d');
+    let { width, height } = image;
 
-    const resultPlaceholder = document.getElementById('result-placeholder');
-    const loader = document.getElementById('loader');
-    const resultCanvas = document.getElementById('result-canvas');
-    const resultImgEl = document.getElementById('result-img');
-    const aiResponse = document.getElementById('ai-response');
-
-    const exampleButtonsContainer = document.getElementById('example-buttons-container');
-    const addPromptBtn = document.getElementById('add-prompt-btn');
-
-    // 狀態
-    let imageInfo1 = null;  // { mimeType, imageObject }
-    let imageInfo2 = null;
-    let currentResultImage = null;
-    let currentResultMime = null;
-    let currentObjectUrl = null;
-
-    // ===== 工具 =====
-    function getImageDataForApi(image, mimeType, maxSize = 1536) {
-      const off = document.createElement('canvas');
-      const ctx = off.getContext('2d');
-
-      let { width, height } = image;
-      if (width > height) {
-        if (width > maxSize) { height = Math.round(height * (maxSize / width)); width = maxSize; }
-      } else {
-        if (height > maxSize) { width = Math.round(width * (maxSize / height)); height = maxSize; }
-      }
-      off.width = width; off.height = height;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(image, 0, 0, width, height);
-
-      const quality = mimeType === 'image/jpeg' ? 0.95 : undefined;
-      return off.toDataURL(mimeType, quality).split(',')[1]; // 純 base64
-    }
-
-    function drawImageOnCanvas(image, canvas) {
-      const ctx = canvas.getContext('2d');
-      const container = canvas.parentElement;
-
-      const cssW = container.clientWidth || container.offsetWidth || 512;
-      const cssH = container.clientHeight || container.offsetHeight || 512;
-
-      const dpr = Math.max(1, window.devicePixelRatio || 1);
-      canvas.width = Math.max(1, Math.round(cssW * dpr));
-      canvas.height = Math.max(1, Math.round(cssH * dpr));
-      canvas.style.width = cssW + 'px';
-      canvas.style.height = cssH + 'px';
-
-      const canvasRatio = canvas.width / canvas.height;
-      const imageRatio = image.width / image.height;
-
-      let drawW, drawH, offsetX, offsetY;
-      if (imageRatio > canvasRatio) {
-        drawW = canvas.width; drawH = drawW / imageRatio;
-        offsetX = 0; offsetY = (canvas.height - drawH) / 2;
-      } else {
-        drawH = canvas.height; drawW = drawH * imageRatio;
-        offsetY = 0; offsetX = (canvas.width - drawW) / 2;
-      }
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(image, offsetX, offsetY, drawW, drawH);
-      canvas.style.display = 'block';
-    }
-
-    function clearCanvas(canvas, label, removeBtn) {
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      canvas.style.display = 'none';
-      label.style.display = 'flex';
-      removeBtn.style.display = 'none';
-    }
-
-    function setupImageUpload(fileInput, canvas, label, removeBtn, assignInfo) {
-      fileInput.addEventListener('change', (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          const img = new Image();
-          img.onload = () => {
-            assignInfo({ mimeType: file.type, imageObject: img });
-            drawImageOnCanvas(img, canvas);
-            label.style.display = 'none';
-            removeBtn.style.display = 'grid';
-          };
-          img.src = ev.target.result;
-        };
-        reader.readAsDataURL(file);
-      });
-
-      removeBtn.addEventListener('click', () => {
-        fileInput.value = '';
-        clearCanvas(canvas, label, removeBtn);
-        assignInfo(null);
-      });
-    }
-
-    function setLoadingState(isLoading) {
-      if (isLoading) {
-        generateBtn.disabled = true;
-        generateBtn.textContent = '生成中...';
-        resultPlaceholder.style.display = 'none';
-        resultCanvas.style.display = 'none';
-        resultImgEl.style.display = 'none';
-        loader.style.display = 'block';
-        aiResponse.textContent = '已將請求發送到 AI，請稍候...';
-        copyToInput1Btn.style.display = 'none';
-        downloadBtn.classList.remove('enabled');
-        if (currentObjectUrl) { URL.revokeObjectURL(currentObjectUrl); currentObjectUrl = null; }
-      } else {
-        generateBtn.disabled = false;
-        generateBtn.textContent = '⚡️ 產生圖片';
-        loader.style.display = 'none';
-        if (currentResultImage) copyToInput1Btn.style.display = 'block';
-      }
-    }
-
-    // ===== 主要流程 =====
-    async function handleGenerateClick() {
-      if (!imageInfo1 || !promptInput.value.trim()) {
-        aiResponse.textContent = '錯誤：請至少上傳第一張圖片並輸入編輯指令。';
-        return;
-      }
-      setLoadingState(true);
-      currentResultImage = null; currentResultMime = null;
-
-      try {
-        const payload = {
-          prompt: promptInput.value,
-          image1_mimeType: imageInfo1?.mimeType || null,
-          image1_data: imageInfo1 ? getImageDataForApi(imageInfo1.imageObject, imageInfo1.mimeType) : null,
-          image2_mimeType: imageInfo2?.mimeType || null,
-          image2_data: imageInfo2 ? getImageDataForApi(imageInfo2.imageObject, imageInfo2.mimeType) : null
-        };
-
-        const response = await fetch(N8N_WEBHOOK_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': '*/*' },
-          body: JSON.stringify(payload),
-          mode: 'cors',
-          credentials: 'omit'
-        });
-
-        const ct = (response.headers.get('content-type') || '').toLowerCase();
-        const isLikelyJson  = ct.includes('application/json') || ct.includes('+json');
-        const isLikelyImage = ct.startsWith('image/') || ct.includes('application/octet-stream');
-
-        // A) Binary / octet-stream → 先顯示 <img>，再嘗試畫到 canvas
-        if (isLikelyImage || (!isLikelyJson && response.ok)) {
-          const blob = await response.blob();
-          const mime = (ct && !ct.includes('octet-stream')) ? ct.split(';')[0] : 'image/png';
-
-          const objectUrl = URL.createObjectURL(blob);
-          currentObjectUrl = objectUrl;
-          currentResultMime = mime;
-
-          downloadBtn.href = objectUrl;
-          downloadBtn.classList.add('enabled');
-
-          // 先顯示 IMG，立即可見
-          resultImgEl.crossOrigin = 'anonymous';
-          resultImgEl.onload = () => {
-            resultImgEl.style.display = 'block';
-            resultPlaceholder.style.display = 'none';
-
-            // 再嘗試畫到 Canvas（若尺寸還沒算好，下一個 frame 再畫）
-            requestAnimationFrame(() => {
-              try {
-                drawImageOnCanvas(resultImgEl, resultCanvas);
-                resultCanvas.style.display = 'block';
-              } catch (e) {
-                console.warn('Canvas 繪製失敗，僅顯示 IMG：', e);
-                resultCanvas.style.display = 'none';
-              }
-            });
-          };
-          resultImgEl.onerror = (e) => {
-            console.error('IMG 載入失敗：', e);
-            resultImgEl.style.display = 'none';
-          };
-          resultImgEl.src = objectUrl;
-
-          aiResponse.textContent = `圖片已成功生成！（${mime || 'image/*'}）`;
-          return;
+    if (width > height) {
+        if (width > maxSize) {
+            height = Math.round(height * (maxSize / width));
+            width = maxSize;
         }
-
-        // B) JSON 內嵌 base64 圖
-        const rawText = await response.text();
-        if (!response.ok) {
-          let msg = rawText;
-          try { const errJson = JSON.parse(rawText); msg = errJson.message || errJson.error || rawText; } catch {}
-          throw new Error(`伺服器錯誤：${msg}`);
+    } else {
+        if (height > maxSize) {
+            width = Math.round(width * (maxSize / height));
+            height = maxSize;
         }
-
-        let result;
-        try { result = JSON.parse(rawText); }
-        catch { throw new Error(`回傳內容非圖片亦非合法 JSON：${rawText.slice(0,200)}...`); }
-
-        const candidates = Array.isArray(result.candidates) ? result.candidates : [];
-        const parts = candidates[0]?.content?.parts || [];
-
-        const imgPart = (() => {
-          for (const p of parts) {
-            const inl = p.inlineData || p.inline_data;
-            if (inl && typeof inl.data === 'string') {
-              const mt = inl.mimeType || inl.mime_type || '';
-              if (mt.startsWith('image/')) return { data: inl.data, mime: mt };
-            }
-          }
-          return null;
-        })();
-
-        if (imgPart) {
-          const dataUrl = `data:${imgPart.mime};base64,${imgPart.data}`;
-          currentResultMime = imgPart.mime;
-
-          downloadBtn.href = dataUrl;
-          downloadBtn.classList.add('enabled');
-
-          // 先顯示 IMG
-          resultImgEl.onload = () => {
-            resultImgEl.style.display = 'block';
-            resultPlaceholder.style.display = 'none';
-            requestAnimationFrame(() => {
-              try {
-                drawImageOnCanvas(resultImgEl, resultCanvas);
-                resultCanvas.style.display = 'block';
-              } catch (e) {
-                console.warn('Canvas 繪製失敗，僅顯示 IMG：', e);
-                resultCanvas.style.display = 'none';
-              }
-            });
-          };
-          resultImgEl.onerror = (e) => {
-            console.error('IMG 載入失敗：', e);
-            resultImgEl.style.display = 'none';
-          };
-          resultImgEl.src = dataUrl;
-
-          aiResponse.textContent = '圖片已成功生成！（JSON 內嵌 base64）';
-          return;
-        }
-
-        // 仍無圖片 → 顯示文字回應（利於除錯）
-        const textResp = parts.find(p => typeof p.text === 'string')?.text;
-        throw new Error(textResp ? `AI 回傳了文字：${textResp.slice(0,200)}...` : 'AI 回傳內容中未找到圖片。');
-
-      } catch (err) {
-        console.error(err);
-        aiResponse.textContent = `發生錯誤：${err.message}`;
-        const ctx = resultCanvas.getContext('2d');
-        ctx.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
-        resultCanvas.style.display = 'none';
-        resultImgEl.style.display = 'none';
-        resultPlaceholder.style.display = 'block';
-        downloadBtn.classList.remove('enabled');
-        currentResultImage = null;
-        if (currentObjectUrl) { URL.revokeObjectURL(currentObjectUrl); currentObjectUrl = null; }
-      } finally {
-        setLoadingState(false);
-      }
     }
-
-    function handleCopyToInput1() {
-      // 從 <img> 來源複製就好（已顯示成功）
-      if (!resultImgEl.src) {
-        aiResponse.textContent = '沒有生成好的圖片可以複製。';
-        return;
-      }
-
-      // 把 IMG 當作來源圖，建立 Image 物件
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        // 清第一張
-        fileInput1.value = '';
-        clearCanvas(canvas1, uploadLabel1, removeBtn1);
-
-        // 顯示
-        drawImageOnCanvas(img, canvas1);
-        uploadLabel1.style.display = 'none';
-        removeBtn1.style.display = 'grid';
-
-        // 更新 imageInfo1 以利再次送出
-        const mime = currentResultMime || 'image/png';
-        imageInfo1 = { mimeType: mime, imageObject: img };
-
-        aiResponse.textContent = '生成圖片已複製到第一張圖位置！您可以繼續進行編輯。';
-        copyToInput1Btn.style.display = 'none';
-      };
-      img.src = resultImgEl.src;
-    }
-
-    // ===== 範本指令（可編輯/新增/刪除） =====
-    const PROMPT_STORAGE_KEY = 'customExamplePrompts_v2';
-    const defaultPrompts = [
-      '把第一張圖轉成黑色線條的卡通線稿，背景留白。',
-      '融合兩張圖的主體與構圖，風格統一為日系插畫。',
-      '把第一張圖的人臉自然地換到第二張圖的主體上。',
-      '將第一張圖的風格套用到第二張圖，顏色柔和。'
-    ];
-    const icons = { edit:'✏️', save:'✅', del:'❌' };
-
-    function getPrompts(){
-      try{ const t = localStorage.getItem(PROMPT_STORAGE_KEY); return t ? JSON.parse(t) : defaultPrompts.slice(); }
-      catch{ return defaultPrompts.slice(); }
-    }
-    function savePrompts(prompts){ localStorage.setItem(PROMPT_STORAGE_KEY, JSON.stringify(prompts)); }
-    function renderExampleButtons(){
-      const prompts = getPrompts();
-      exampleButtonsContainer.innerHTML = '';
-      prompts.forEach((text, idx) => {
-        const chip = document.createElement('div');
-        chip.className = 'prompt-chip';
-        chip.dataset.index = idx;
-        chip.innerHTML = `<span class="prompt-text">${text}</span><button class="chip-icon edit-icon" title="編輯">✏️</button>`;
-        exampleButtonsContainer.appendChild(chip);
-      });
-    }
-
-    exampleButtonsContainer.addEventListener('click', (e) => {
-      const target = e.target.closest('button, .prompt-text'); if (!target) return;
-      const chip = target.closest('.prompt-chip');
-      const index = parseInt(chip.dataset.index, 10);
-      let prompts = getPrompts();
-
-      if (target.classList.contains('edit-icon')) {
-        const currentText = chip.querySelector('.prompt-text').textContent;
-        chip.innerHTML = `
-          <input type="text" class="edit-input" value="${currentText}" />
-          <button class="chip-icon save-icon" title="儲存">✅</button>
-          <button class="chip-icon delete-icon" title="刪除">❌</button>`;
-        chip.querySelector('.edit-input').focus();
-      } else if (target.classList.contains('save-icon')) {
-        const input = chip.querySelector('.edit-input');
-        const newText = (input.value || '').trim();
-        if (newText) { prompts[index] = newText; savePrompts(prompts); }
-        renderExampleButtons();
-      } else if (target.classList.contains('delete-icon')) {
-        if (confirm(`確定要刪除範本「${prompts[index]}」嗎？`)) {
-          prompts.splice(index, 1); savePrompts(prompts); renderExampleButtons();
-        }
-      } else if (target.classList.contains('prompt-text')) {
-        document.getElementById('prompt-input').value = target.textContent;
-      }
-    });
-
-    // ===== 初始化 =====
-    function initialize(){
-      setupImageUpload(fileInput1, canvas1, uploadLabel1, removeBtn1, (v) => { imageInfo1 = v; });
-      setupImageUpload(fileInput2, canvas2, uploadLabel2, removeBtn2, (v) => { imageInfo2 = v; });
-
-      document.getElementById('generate-btn').addEventListener('click', handleGenerateClick);
-      document.getElementById('copy-to-input1-btn').addEventListener('click', handleCopyToInput1);
-
-      // 視窗縮放時重新繪製，避免預覽糊掉
-      window.addEventListener('resize', () => {
-        if (imageInfo1?.imageObject) drawImageOnCanvas(imageInfo1.imageObject, canvas1);
-        if (imageInfo2?.imageObject) drawImageOnCanvas(imageInfo2.imageObject, canvas2);
-        if (resultImgEl.src) {
-          try { drawImageOnCanvas(resultImgEl, resultCanvas); resultCanvas.style.display='block'; } catch {}
-        }
-      });
-
-      renderExampleButtons();
-    }
-    initialize();
-  </script>
-</body>
-</html>
+    offscreenCanvas.width = width;
+    offscreenCanvas.height = height;
+    ctx.drawImage(image, 0, 0, width, height);
+    
+    // 對於 JPEG 格式，可以指定較高的品質
+    const quality = mimeType === 'image/jpeg' ? 0.95 : undefined;
+    return offscreenCanvas.toDataURL(mimeType, qualit
