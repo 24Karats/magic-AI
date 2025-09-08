@@ -227,7 +227,7 @@ async function handleGenerateClick() {
         } else {
             const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
             if (textResponse && textResponse.trim() !== '') {
-                throw new Error(`AI 回傳了文字訊息，而非圖片：${textResponse}`);
+                throw new Error(`AI 無法處理您的請求。這可能是因為圖片或指令內容觸發了安全機制，請嘗試更換圖片或修改您的指令。`);
             } else {
                 throw new Error('AI 無法處理您的請求。這可能是因為圖片或指令內容觸發了安全機制，請嘗試更換圖片或修改您的指令。');
             }
