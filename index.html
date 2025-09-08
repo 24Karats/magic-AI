@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>MIXXIN AI 圖片生成器（Canvas）</title>
+  <title>MIXXIN AI 圖片生成器（Canvas + IMG 雙保險）</title>
   <style>
     :root{
       --bg-color:#FFF9E6;
@@ -39,6 +39,7 @@
       position:relative; aspect-ratio:1/1; overflow:hidden;
       display:flex; justify-content:center; align-items:center;
       transition:border-color .25s;
+      min-height:300px; /* 讓容器一定有高度，避免初次為 0 */
     }
     .upload-box:hover{border-color:var(--accent-color)}
     .upload-box label{
@@ -96,6 +97,12 @@
     #loader{display:none}
     #ai-response{font-size:.92rem; color:var(--text-secondary-color); white-space:pre-wrap}
 
+    /* 顯示保底：用 <img> 也能看見結果 */
+    #result-img{
+      display:none; max-width:100%; max-height:100%; border-radius:8px; object-fit:contain;
+      position:absolute; inset:1rem; /* 與 canvas 區域重疊 */
+    }
+
     @media (max-width:900px){ .main-grid{grid-template-columns:1fr} }
   </style>
 </head>
@@ -139,9 +146,10 @@
 
       <!-- 右欄：輸出 -->
       <div class="output-section">
-        <div class="result-box">
+        <div class="result-box" id="result-box">
           <div id="result-placeholder">編輯後圖片</div>
           <div id="loader">🎨 AI 正在揮灑創意... 請稍候...</div>
+          <img id="result-img" alt="生成結果" />
           <canvas id="result-canvas" style="display:none;"></canvas>
         </div>
 
@@ -157,7 +165,7 @@
   </div>
 
   <script>
-    // ★ 把這個改成你的 n8n Webhook（或直接使用目前這個）
+    // ★ 把這個改成你的 n8n Webhook
     const N8N_WEBHOOK_URL = 'https://n8n.mixxin.tw/webhook/55dc8853-afd8-41ed-a271-2a8ed64737cd';
 
     // DOM
@@ -178,6 +186,7 @@
     const resultPlaceholder = document.getElementById('result-placeholder');
     const loader = document.getElementById('loader');
     const resultCanvas = document.getElementById('result-canvas');
+    const resultImgEl = document.getElementById('result-img');
     const aiResponse = document.getElementById('ai-response');
 
     const exampleButtonsContainer = document.getElementById('example-buttons-container');
@@ -213,8 +222,8 @@
       const ctx = canvas.getContext('2d');
       const container = canvas.parentElement;
 
-      const cssW = container.clientWidth || 512;
-      const cssH = container.clientHeight || 512;
+      const cssW = container.clientWidth || container.offsetWidth || 512;
+      const cssH = container.clientHeight || container.offsetHeight || 512;
 
       const dpr = Math.max(1, window.devicePixelRatio || 1);
       canvas.width = Math.max(1, Math.round(cssW * dpr));
@@ -280,6 +289,7 @@
         generateBtn.textContent = '生成中...';
         resultPlaceholder.style.display = 'none';
         resultCanvas.style.display = 'none';
+        resultImgEl.style.display = 'none';
         loader.style.display = 'block';
         aiResponse.textContent = '已將請求發送到 AI，請稍候...';
         copyToInput1Btn.style.display = 'none';
@@ -323,7 +333,7 @@
         const isLikelyJson  = ct.includes('application/json') || ct.includes('+json');
         const isLikelyImage = ct.startsWith('image/') || ct.includes('application/octet-stream');
 
-        // A) Binary / octet-stream → blob 顯示
+        // A) Binary / octet-stream → 先顯示 <img>，再嘗試畫到 canvas
         if (isLikelyImage || (!isLikelyJson && response.ok)) {
           const blob = await response.blob();
           const mime = (ct && !ct.includes('octet-stream')) ? ct.split(';')[0] : 'image/png';
@@ -335,14 +345,28 @@
           downloadBtn.href = objectUrl;
           downloadBtn.classList.add('enabled');
 
-          const img = new Image();
-          img.onload = () => {
-            drawImageOnCanvas(img, resultCanvas);
-            resultCanvas.style.display = 'block';
-            currentResultImage = img;
-            copyToInput1Btn.style.display = 'block';
+          // 先顯示 IMG，立即可見
+          resultImgEl.crossOrigin = 'anonymous';
+          resultImgEl.onload = () => {
+            resultImgEl.style.display = 'block';
+            resultPlaceholder.style.display = 'none';
+
+            // 再嘗試畫到 Canvas（若尺寸還沒算好，下一個 frame 再畫）
+            requestAnimationFrame(() => {
+              try {
+                drawImageOnCanvas(resultImgEl, resultCanvas);
+                resultCanvas.style.display = 'block';
+              } catch (e) {
+                console.warn('Canvas 繪製失敗，僅顯示 IMG：', e);
+                resultCanvas.style.display = 'none';
+              }
+            });
           };
-          img.src = objectUrl;
+          resultImgEl.onerror = (e) => {
+            console.error('IMG 載入失敗：', e);
+            resultImgEl.style.display = 'none';
+          };
+          resultImgEl.src = objectUrl;
 
           aiResponse.textContent = `圖片已成功生成！（${mime || 'image/*'}）`;
           return;
@@ -381,14 +405,25 @@
           downloadBtn.href = dataUrl;
           downloadBtn.classList.add('enabled');
 
-          const img = new Image();
-          img.onload = () => {
-            drawImageOnCanvas(img, resultCanvas);
-            resultCanvas.style.display = 'block';
-            currentResultImage = img;
-            copyToInput1Btn.style.display = 'block';
+          // 先顯示 IMG
+          resultImgEl.onload = () => {
+            resultImgEl.style.display = 'block';
+            resultPlaceholder.style.display = 'none';
+            requestAnimationFrame(() => {
+              try {
+                drawImageOnCanvas(resultImgEl, resultCanvas);
+                resultCanvas.style.display = 'block';
+              } catch (e) {
+                console.warn('Canvas 繪製失敗，僅顯示 IMG：', e);
+                resultCanvas.style.display = 'none';
+              }
+            });
           };
-          img.src = dataUrl;
+          resultImgEl.onerror = (e) => {
+            console.error('IMG 載入失敗：', e);
+            resultImgEl.style.display = 'none';
+          };
+          resultImgEl.src = dataUrl;
 
           aiResponse.textContent = '圖片已成功生成！（JSON 內嵌 base64）';
           return;
@@ -404,9 +439,10 @@
         const ctx = resultCanvas.getContext('2d');
         ctx.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
         resultCanvas.style.display = 'none';
+        resultImgEl.style.display = 'none';
         resultPlaceholder.style.display = 'block';
-        currentResultImage = null;
         downloadBtn.classList.remove('enabled');
+        currentResultImage = null;
         if (currentObjectUrl) { URL.revokeObjectURL(currentObjectUrl); currentObjectUrl = null; }
       } finally {
         setLoadingState(false);
@@ -414,30 +450,33 @@
     }
 
     function handleCopyToInput1() {
-      if (!currentResultImage || !currentResultMime) {
+      // 從 <img> 來源複製就好（已顯示成功）
+      if (!resultImgEl.src) {
         aiResponse.textContent = '沒有生成好的圖片可以複製。';
         return;
       }
 
-      // 清第一張
-      fileInput1.value = '';
-      clearCanvas(canvas1, uploadLabel1, removeBtn1);
-      imageInfo1 = null;
+      // 把 IMG 當作來源圖，建立 Image 物件
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        // 清第一張
+        fileInput1.value = '';
+        clearCanvas(canvas1, uploadLabel1, removeBtn1);
 
-      // 顯示
-      drawImageOnCanvas(currentResultImage, canvas1);
-      uploadLabel1.style.display = 'none';
-      removeBtn1.style.display = 'grid';
+        // 顯示
+        drawImageOnCanvas(img, canvas1);
+        uploadLabel1.style.display = 'none';
+        removeBtn1.style.display = 'grid';
 
-      // 更新 imageInfo1 以利再次送出
-      imageInfo1 = { mimeType: currentResultMime, imageObject: currentResultImage };
+        // 更新 imageInfo1 以利再次送出
+        const mime = currentResultMime || 'image/png';
+        imageInfo1 = { mimeType: mime, imageObject: img };
 
-      aiResponse.textContent = '生成圖片已複製到第一張圖位置！您可以繼續進行編輯。';
-      copyToInput1Btn.style.display = 'none';
-
-      // 若來源是 blob，釋放 object URL（不影響畫布中的像素）
-      if (currentObjectUrl) { URL.revokeObjectURL(currentObjectUrl); currentObjectUrl = null; }
-      currentResultImage = null; currentResultMime = null;
+        aiResponse.textContent = '生成圖片已複製到第一張圖位置！您可以繼續進行編輯。';
+        copyToInput1Btn.style.display = 'none';
+      };
+      img.src = resultImgEl.src;
     }
 
     // ===== 範本指令（可編輯/新增/刪除） =====
@@ -462,7 +501,7 @@
         const chip = document.createElement('div');
         chip.className = 'prompt-chip';
         chip.dataset.index = idx;
-        chip.innerHTML = `<span class="prompt-text">${text}</span><button class="chip-icon edit-icon" title="編輯">${icons.edit}</button>`;
+        chip.innerHTML = `<span class="prompt-text">${text}</span><button class="chip-icon edit-icon" title="編輯">✏️</button>`;
         exampleButtonsContainer.appendChild(chip);
       });
     }
@@ -477,8 +516,8 @@
         const currentText = chip.querySelector('.prompt-text').textContent;
         chip.innerHTML = `
           <input type="text" class="edit-input" value="${currentText}" />
-          <button class="chip-icon save-icon" title="儲存">${icons.save}</button>
-          <button class="chip-icon delete-icon" title="刪除">${icons.del}</button>`;
+          <button class="chip-icon save-icon" title="儲存">✅</button>
+          <button class="chip-icon delete-icon" title="刪除">❌</button>`;
         chip.querySelector('.edit-input').focus();
       } else if (target.classList.contains('save-icon')) {
         const input = chip.querySelector('.edit-input');
@@ -490,17 +529,7 @@
           prompts.splice(index, 1); savePrompts(prompts); renderExampleButtons();
         }
       } else if (target.classList.contains('prompt-text')) {
-        promptInput.value = target.textContent;
-      }
-    });
-
-    addPromptBtn.addEventListener('click', () => {
-      const newPrompt = prompt('請輸入要新增的範本指令：');
-      if (newPrompt && newPrompt.trim()) {
-        const prompts = getPrompts();
-        prompts.push(newPrompt.trim());
-        savePrompts(prompts);
-        renderExampleButtons();
+        document.getElementById('prompt-input').value = target.textContent;
       }
     });
 
@@ -509,14 +538,16 @@
       setupImageUpload(fileInput1, canvas1, uploadLabel1, removeBtn1, (v) => { imageInfo1 = v; });
       setupImageUpload(fileInput2, canvas2, uploadLabel2, removeBtn2, (v) => { imageInfo2 = v; });
 
-      generateBtn.addEventListener('click', handleGenerateClick);
-      copyToInput1Btn.addEventListener('click', handleCopyToInput1);
+      document.getElementById('generate-btn').addEventListener('click', handleGenerateClick);
+      document.getElementById('copy-to-input1-btn').addEventListener('click', handleCopyToInput1);
 
       // 視窗縮放時重新繪製，避免預覽糊掉
       window.addEventListener('resize', () => {
         if (imageInfo1?.imageObject) drawImageOnCanvas(imageInfo1.imageObject, canvas1);
         if (imageInfo2?.imageObject) drawImageOnCanvas(imageInfo2.imageObject, canvas2);
-        if (currentResultImage) drawImageOnCanvas(currentResultImage, resultCanvas);
+        if (resultImgEl.src) {
+          try { drawImageOnCanvas(resultImgEl, resultCanvas); resultCanvas.style.display='block'; } catch {}
+        }
       });
 
       renderExampleButtons();
